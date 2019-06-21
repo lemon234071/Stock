@@ -14,9 +14,6 @@ class MyStrategy(object):
     className = 'MyStrategy'
     author = 'Yida Wang'
 
-    # 策略变量
-    transactionPrice = {}  # 记录成交价格
-
     # 参数列表
     paramList = [
         'symbolList', 'barPeriod', 'lot',
@@ -28,14 +25,9 @@ class MyStrategy(object):
         'hlMaPeriod', 'maPeriod',
     ]
 
-    # 变量列表
-    varList = ['transactionPrice']
-
-    # 同步列表，保存了需要保存到数据库的变量名称
-    syncList = ['posDict', 'eveningDict']
-
     # ----------------------------------------------------------------------
     def __init__(self, context, target):
+        self.context = context
         self.paraDict = context.paraDict
         self.target = target
         self.target_idx = target.target_idx.iloc[0]
@@ -46,12 +38,13 @@ class MyStrategy(object):
         self.low = target.low.values.astype('float')
         self.update_setting(self.paraDict)
         self.transactionPrice = get_last_order(account_idx=0, target_idx=self.target_idx, position_effect=1)
+        self.n_buy = 0
 
     def update_setting(self, setting: dict):
         """
         Update strategy parameter wtih value in setting dict.
         """
-        for name in self.parameters:
+        for name in self.paramList:
             if name in setting:
                 setattr(self, name, setting[name])
 
@@ -65,11 +58,11 @@ class MyStrategy(object):
         order_cancel_all()
 
     def buy(self, price):
-        order_target_value(account_idx=0, target_idx=self.target_idx, target_value=context.initial * 5 / context.Tlen,
+        order_target_value(account_idx=0, target_idx=self.target_idx, target_value=self.context.initial * 5 / self.context.Tlen,
                            side=1, order_type=1, price=price)
 
     def short(self, price):
-        order_target_value(account_idx=0, target_idx=self.target_idx, target_value=context.initial * 5 / context.Tlen,
+        order_target_value(account_idx=0, target_idx=self.target_idx, target_value=self.context.initial * 5 / self.context.Tlen,
                            side=2, order_type=1, price=price)
 
     # ----------------------------------------------------------------------
@@ -94,35 +87,37 @@ class MyStrategy(object):
         algorithm = MySignal(self.target, self.paraDict)
         trendStatus = 0
         exitLongTrendSignal, exitShortTrendSignal = 0, 0
-        trendStatus = algorithm.cmiEnvironment()
+        trendStatus, cmiMa = algorithm.cmiEnvironment()
         exitLongTrendSignal, exitShortTrendSignal = algorithm.maExit()
         atr = algorithm.atrStoploss()
         return trendStatus, exitLongTrendSignal, exitShortTrendSignal, atr
 
-    def exitOrder(self,bar, trendStatus, exitLongTrendSignal, exitShortTrendSignal, atr):
+    def exitOrder(self, bar, trendStatus, exitLongTrendSignal, exitShortTrendSignal, atr):
         exitStatus = 0
         # 执行出场条件
         if trendStatus == 1:
-            if exitLongTrendSignal and self.long_positions > 0:
-                self.sell(bar.close[-1] * 0.99)
+            if exitLongTrendSignal and self.long_positions[self.target_idx] > 0:
+                self.sell(bar.close * 0.99)
                 exitStatus = 1
-            if exitShortTrendSignal and self.short_positions > 0:
+            if exitShortTrendSignal and self.short_positions[self.target_idx] > 0:
                 self.cover(bar.close * 1.01)
                 exitStatus = 1
         else:
             # 止损出场
+            print("止损")
             longStop, shortStop = None, None
-            if self.transactionPrice:
+            if self.transactionPrice is not None:
+                self.transactionPrice = self.transactionPrice.price.values.astype('float')
                 longStop = self.transactionPrice - self.stopAtrTime * atr[-1]
                 shortStop = self.transactionPrice + self.stopAtrTime * atr[-1]
             # 洗价器
-            if (self.long_positions > 0):
+            if (self.long_positions[self.target_idx] > 0):
                 if (bar.low< longStop):
                     # print('LONG stopLoss')
                     self.cancelAll()
                     self.sell(bar.close * 0.99)
                     exitStatus = 1
-            elif (self.short_positions > 0):
+            elif (self.short_positions[self.target_idx] > 0):
                 if (bar.high > shortStop):
                     # print('SHORT stopLoss')
                     self.cancelAll()
@@ -131,7 +126,7 @@ class MyStrategy(object):
         return exitStatus
 
     def entrySignal(self):
-        algorithm = MySignal()
+        algorithm = MySignal(self.target, self.paraDict)
         breakUpperBand, breakLowerBand = 0, 0
         trendStatus, cmiMa = algorithm.cmiEnvironment()
         filterCanTrade = algorithm.filterLowAtr()
@@ -149,18 +144,20 @@ class MyStrategy(object):
 
     def entryOrder(self, bar, filterCanTrade, breakUpperBand, breakLowerBand):
         if filterCanTrade == 1:
-            if breakUpperBand and (self.long_positions == 0):
-                if self.short_positions == 0:
+            if breakUpperBand and (self.long_positions[self.target_idx] == 0):
+                #print(2)
+                if self.short_positions[self.target_idx] == 0:
                     self.buy(bar.close * 1.01)  # 成交价*1.01发送高价位的限价单，以最优市价买入进场
                 # 如果有空头持仓，则先平空，再做多
-                elif self.short_positions > 0:
+                elif self.short_positions[self.target_idx] > 0:
                     self.cancelAll()  # 撤销挂单
                     self.cover(bar.close * 1.01)
                     self.buy(bar.close * 1.01)
-            elif breakLowerBand and (self.short_positions == 0):
-                if self.long_positions == 0:
+            elif breakLowerBand and (self.short_positions[self.target_idx] == 0):
+                #print(3)
+                if self.long_positions[self.target_idx] == 0:
                     self.short(bar.close * 0.99)  # 成交价*0.99发送低价位的限价单，以最优市价卖出进场
-                elif self.long_positions > 0:
+                elif self.long_positions[self.target_idx] > 0:
                     self.cancelAll()  # 撤销挂单
                     self.sell(bar.close * 0.99)
                     self.short(bar.close * 0.99)

@@ -36,19 +36,26 @@ def init(context):
     reg_kdata('min', 1)
     context.Tlen = len(context.target_list)
     # 获取当前绝对路径
-    path = os.path.split(os.path.realpath(__file__))[0]
-    with open(path+"//CTA_setting.json") as f:
+    path = os.path.split(os.path.realpath('__file__'))[0]
+    with open(path+"\\CTA_setting.json") as f:
         context.paraDict = json.load(f)[0]
-    context.N = 101
+
+    context.initial = 1e7
+    context.N = 150
+    context.count = 0
 
 def on_data(context):
-    data = get_reg_kdata(reg_idx=context.reg_kdata[0], length=context.N + 1, fill_up=True, df=True)
+    data = get_reg_kdata(reg_idx=context.reg_kdata[0], length=context.N, fill_up=True, df=True)
     if data['close'].isna().any():
         return
     datalist = [data[data['target_idx'] == x] for x in pd.unique(data.target_idx)]
     bar = get_current_bar()
     for i, target in enumerate(datalist):
         strategy = MyStrategy(context, target)
+        context.count += 1
+        # if context.count==471:
+        #     print("bug")
+        # print(context.count)
         strategy.on5MinBar(bar.ix[i])
 
 
