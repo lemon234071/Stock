@@ -47,12 +47,13 @@ class MySignal():
         priceDirection = 1 if self.close[-1] > hlcMean else -1
         longMultipler = smallAtrTime if priceDirection==1 else bigAtrTime
         shortMultipler = smallAtrTime if priceDirection==-1 else bigAtrTime
-        upperBand = self.close[-1]+longMultipler*atr[-1]
-        lowerBand = self.close[-1]-shortMultipler*atr[-1]
-        breakUpperBand = self.close[-1]>upperBand and self.close[-2]<upperBand
+        # smallAtrTime < bigAtrTime
+        upperBand = self.close[-1] + longMultipler*atr[-1]
+        lowerBand = self.close[-1] - shortMultipler*atr[-1]
+        breakUpperBand = self.close[-1] > hlcMean
         if breakUpperBand == True:
             print("bug")
-        breakLowerBand = self.close[-1]<lowerBand and self.close[-2]>lowerBand
+        breakLowerBand = self.close[-1] <= hlcMean
         if breakLowerBand == True:
             print('bug')
 

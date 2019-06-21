@@ -79,9 +79,9 @@ class MyStrategy(object):
         exitStatus = self.exitOrder(bar, trendStatus, exitLongTrendSignal, exitShortTrendSignal, atr)
 
         # 根据进场信号进场
-        filterCanTrade, breakUpperBand, breakLowerBand = self.entrySignal()
+        filterCanTrade, breakUpperBand, breakLowerBand, buyPrice, sellPrice = self.entrySignal()
         if not exitStatus:
-            self.entryOrder(bar, filterCanTrade, breakUpperBand, breakLowerBand)
+            self.entryOrder(bar, filterCanTrade, breakUpperBand, breakLowerBand, buyPrice, sellPrice)
 
     def exitSignal(self):
         algorithm = MySignal(self.target, self.paraDict)
@@ -104,7 +104,6 @@ class MyStrategy(object):
                 exitStatus = 1
         else:
             # 止损出场
-            print("止损")
             longStop, shortStop = None, None
             if self.transactionPrice is not None:
                 self.transactionPrice = self.transactionPrice.price.values.astype('float')
@@ -140,9 +139,9 @@ class MyStrategy(object):
         # self.chartLog['upperBand'].append(upperBand)
         # self.chartLog['lowerBand'].append(lowerBand)
 
-        return filterCanTrade, breakUpperBand, breakLowerBand
+        return filterCanTrade, breakUpperBand, breakLowerBand, upperBand, lowerBand
 
-    def entryOrder(self, bar, filterCanTrade, breakUpperBand, breakLowerBand):
+    def entryOrder(self, bar, filterCanTrade, breakUpperBand, breakLowerBand, buyPrice, sellPrice):
         if filterCanTrade == 1:
             if breakUpperBand and (self.long_positions[self.target_idx] == 0):
                 #print(2)
